@@ -1,7 +1,6 @@
 module Main where
 
 import           Control.Monad
-import           Data.Char
 import           Data.List
 import           System.Environment
 import           System.IO
@@ -17,25 +16,32 @@ data LaneState =
        , modified :: Bool
        } deriving (Show)
 
+data DotState = On | Off | Undef
+instance Show DotState where
+  show dot = case dot of
+    On    -> "■"
+    Off   -> "□"
+    Undef -> "X"
+
 data BoardState =
   Board { height  :: Int
         , width   :: Int
-        , dots    :: [[Bool]]
+        , dots    :: [[DotState]]
         , rowHint :: [LaneState]
         , colHint :: [LaneState]
         } deriving (Show)
 
 ------------ READER ------------
 
-makeBlank :: Int -> Int -> [[Bool]]
-makeBlank h w = replicate h (replicate w False)
+makeBlank :: Int -> Int -> [[DotState]]
+makeBlank h w = replicate h (replicate w Undef)
 
 sizeToHint :: Int -> HintState
 sizeToHint s = Hint s (-1) False
 
 readLane :: String -> LaneState
 readLane lane =
-  Lane (map (sizeToHint . read) $ words lane) False
+  Lane (map (sizeToHint . read) $ words lane) True
 
 readBoard :: String -> IO BoardState
 readBoard fn = do
@@ -50,9 +56,9 @@ readBoard fn = do
   hClose handle
   return $ Board h w (makeBlank h w) rh ch
 
-putRow :: [Bool] -> IO ()
+putRow :: [DotState] -> IO ()
 putRow row = do
-  let squares = [ if c then '■' else '□' | c <- row ]
+  let squares = concat . map show $ row
   putStrLn squares
 
 putSolve :: (String, BoardState) -> IO ()
