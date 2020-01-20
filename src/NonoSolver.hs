@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 module NonoSolver
     (
       HintState (..),
@@ -23,13 +24,26 @@ data HintState =
        , exRange :: Maybe (Int, Int) -- expected range
        , pivot   :: Maybe (Int, Int) -- 0-indexed pivoted cell position-1 if unpivoted
        , solved  :: Bool
-       } deriving (Show)
+       }
+instance Show HintState where
+  show hint =
+    let
+      rng = maybe "(-,-)" show $ exRange hint
+      pvt = maybe "(-,-)" show $ pivot hint
+    in
+    (show $ size hint) ++ rng ++ pvt ++ (if solved hint then "S" else "")
 
 data LaneState =
   Lane { hints    :: [HintState]
        , modified :: Bool
        , finished :: Bool
-       } deriving (Show)
+       }
+instance Show LaneState where
+  show lane =
+    let mflag = if (modified lane) then "M" else "_"
+        fflag = if (finished lane) then "F" else "_"
+    in
+    mflag ++ fflag ++ " " ++ (intercalate " " (map show $ hints lane))
 
 data CellState = On | Off | Undef deriving (Eq)
 instance Show CellState where
@@ -44,7 +58,14 @@ data BoardState =
         , cells   :: [[CellState]]
         , rowHint :: [LaneState]
         , colHint :: [LaneState]
-        } deriving (Show)
+        }
+instance Show BoardState where
+  show board =
+    let
+      header = "(" ++ show (height board) ++ "," ++ show (width board) ++ ")"
+      boardline = map (concat . map show) (cells board)
+    in
+    unlines $ header:(boardline ++ ["--rows--"] ++ map show (rowHint board) ++ ["--columns--"] ++ map show (colHint board))
 
 ------------ READER ------------
 
@@ -58,17 +79,23 @@ readLane :: String -> LaneState
 readLane lane =
   Lane (map (sizeToHint . read) $ words lane) True False
 
-readBoard :: Handle -> IO BoardState
-readBoard handle = do
+readBoard' :: Handle -> IO BoardState
+readBoard' handle = do
   whLine <- hGetLine handle
-  let wh = map read $ words whLine
-      w = head wh
-      h = head $ tail wh
+  let hw = map read $ words whLine
+      h = head hw
+      w = head $ tail hw
   ctn <- hGetContents handle
+  if (w <= 0 || h <= 0) then fail "height or width is less than 1" else return ()
   let lanes = map readLane $ lines ctn
-      (rh, ch) = splitAt w lanes
+  if (length lanes < w + h) then fail "insufficient hint count" else return ()
+  let (!rh, ch') = splitAt w lanes
+  let (!ch, _) = splitAt h ch'
   return $ Board h w (makeBlank h w) rh ch
 
+readBoard :: String -> IO BoardState
+readBoard fileName = do
+  withFile fileName ReadMode readBoard'
 
 ------------ TACTICS ------------
 
@@ -136,14 +163,12 @@ checkSolved board = all (notElem Undef) (cells board)
 
 solveBoard :: BoardState -> BoardState
 solveBoard board =
-  let
-    nextBoard = solveByOverlap board
-  in
+  let nextBoard = solveByOverlap board in
   if checkSolved nextBoard then nextBoard
   else if checkModified nextBoard then solveBoard board
   else solveByDFS nextBoard
 
------------- CONTROL ------------
+------------ PRINTER ------------
 
 printRow :: [CellState] -> IO ()
 printRow row = do
@@ -157,8 +182,7 @@ printBoard board = do
 -- read nonogram file and print solved
 solveFileAndPrint :: String -> IO ()
 solveFileAndPrint fileName = do
-  withFile fileName ReadMode
-    (\handle -> do
-          board <- readBoard handle
-          putStrLn $ "file: " ++ fileName
-          printBoard $ solveBoard board)
+  board <- readBoard fileName
+  printBoard board
+  putStrLn $ "file: " ++ fileName
+  printBoard $ solveBoard board
