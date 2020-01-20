@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7eb56dce09605f411c0d37c73f2c46974b515cdfd350b2f656e95256287ad185
+-- hash: 80df6284ef7b3ce407ee2b8748d6eed87945e908fa4b0fa56f1f620a20aba424
 
 name:           nonosolver
 version:        0.1.0.0
@@ -29,7 +29,7 @@ source-repository head
 
 library
   exposed-modules:
-      Lib
+      NonoSolver
   other-modules:
       Paths_nonosolver
   hs-source-dirs:

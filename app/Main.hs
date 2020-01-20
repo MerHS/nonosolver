@@ -1,6 +1,6 @@
 module Main where
 
-import           Lib
+import           NonoSolver
 import           System.Environment
 
 main :: IO ()
