@@ -1,0 +1,49 @@
+name:                nonosolver
+version:             0.1.0.0
+github:              "MerHS/nonosolver"
+license:             MIT
+author:              "MerHS"
+maintainer:          "starvessel@naver.com"
+copyright:           "2020 MerHS"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+synopsis:            Nonogram Solver
+category:            Game
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/MerHS/nonosolver>
+
+dependencies:
+- base >= 4.7 && < 5
+- split
+
+library:
+  source-dirs: src
+
+executables:
+  nonosolver-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - nonosolver
+
+tests:
+  nonosolver-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - nonosolver

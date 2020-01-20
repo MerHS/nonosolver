@@ -1,0 +1,67 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.31.2.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 7eb56dce09605f411c0d37c73f2c46974b515cdfd350b2f656e95256287ad185
+
+name:           nonosolver
+version:        0.1.0.0
+synopsis:       Nonogram Solver
+description:    Please see the README on GitHub at <https://github.com/MerHS/nonosolver>
+category:       Game
+homepage:       https://github.com/MerHS/nonosolver#readme
+bug-reports:    https://github.com/MerHS/nonosolver/issues
+author:         MerHS
+maintainer:     starvessel@naver.com
+copyright:      2020 MerHS
+license:        MIT
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/MerHS/nonosolver
+
+library
+  exposed-modules:
+      Lib
+  other-modules:
+      Paths_nonosolver
+  hs-source-dirs:
+      src
+  build-depends:
+      base >=4.7 && <5
+    , split
+  default-language: Haskell2010
+
+executable nonosolver-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_nonosolver
+  hs-source-dirs:
+      app
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , nonosolver
+    , split
+  default-language: Haskell2010
+
+test-suite nonosolver-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_nonosolver
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , nonosolver
+    , split
+  default-language: Haskell2010

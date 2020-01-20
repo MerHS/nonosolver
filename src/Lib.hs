@@ -1,10 +1,21 @@
-module Main where
+module Lib
+    (
+      HintState (..),
+      LaneState (..),
+      CellState (..),
+      BoardState (..),
+      readLane,
+      readBoard,
+      printRow,
+      printBoard,
+      solveBoard,
+      solveFileAndPrint
+    ) where
 
 import           Control.Monad
 import           Data.List
 import           Data.List.Split
 import           Data.Maybe
-import           System.Environment
 import           System.IO
 
 data HintState =
@@ -58,14 +69,8 @@ readBoard handle = do
       (rh, ch) = splitAt w lanes
   return $ Board h w (makeBlank h w) rh ch
 
-putRow :: [CellState] -> IO ()
-putRow row = do
-  let squares = concat . map show $ row
-  putStrLn squares
-
 
 ------------ TACTICS ------------
-
 
 -- slice By Off, returns On -> True | Undef -> False List and segment left-position (zero-starting)
 data Segment =
@@ -90,9 +95,9 @@ segments lane =
 -- turnOffBlank :: [CellState] -> LaneState -> [CellState]
 
 -- solve each lane
-solveLane :: LaneState -> [CellState] -> Maybe (LaneState, [CellState])
+solveLane :: LaneState -> [CellState] -> (LaneState, [CellState])
 solveLane laneHint lane =
-  Just (Lane (hints laneHint) False (finished laneHint), lane)
+  (Lane (hints laneHint) False (finished laneHint), lane)
 
 -- assume that lanestate are row hints.
 -- transpose cellstates if you want to set column hints
@@ -100,12 +105,10 @@ setModified :: [LaneState] -> [[CellState]] -> [[CellState]] -> [LaneState]
 setModified =
   zipWith3 $ \lane old new -> if old == new then lane else Lane (hints lane) True (finished lane)
 
-solveByOverlap :: BoardState -> Maybe BoardState
-solveByOverlap board = do
-  let oldCells = cells board
-  rowSolved <- zipWithM solveLane (rowHint board) oldCells
-
-
+solveByOverlap :: BoardState -> BoardState
+solveByOverlap board =
+  -- let oldCells = cells board
+  --rowSolved <- zipWithM solveLane (rowHint board) oldCells
   let oldCells = cells board
       rowSolved = zipWith solveLane (rowHint board) oldCells
       (rtemphint, rcells) = unzip rowSolved
@@ -142,16 +145,20 @@ solveBoard board =
 
 ------------ CONTROL ------------
 
-putSolve :: BoardState -> IO ()
-putSolve board = do
-  mapM_ putRow $ cells board
+printRow :: [CellState] -> IO ()
+printRow row = do
+  let squares = concat . map show $ row
+  putStrLn squares
 
-main :: IO ()
-main = do
-  args <- getArgs
-  mapM_
-    (\fn -> withFile fn ReadMode
-       (\handle -> do
+printBoard :: BoardState -> IO ()
+printBoard board = do
+  mapM_ printRow $ cells board
+
+-- read nonogram file and print solved
+solveFileAndPrint :: String -> IO ()
+solveFileAndPrint fileName = do
+  withFile fileName ReadMode
+    (\handle -> do
           board <- readBoard handle
-          putSolve $ solveBoard board))
-    args
+          putStrLn $ "file: " ++ fileName
+          printBoard $ solveBoard board)
