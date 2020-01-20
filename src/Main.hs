@@ -8,9 +8,10 @@ import           System.Environment
 import           System.IO
 
 data HintState =
-  Hint { size   :: Int
-       , pivot  :: Int -- 0-indexed pivoted cell position-1 if unpivoted
-       , solved :: Bool
+  Hint { size    :: Int
+       , exRange :: Maybe (Int, Int) -- expected range
+       , pivot   :: Maybe (Int, Int) -- 0-indexed pivoted cell position-1 if unpivoted
+       , solved  :: Bool
        } deriving (Show)
 
 data LaneState =
@@ -40,7 +41,7 @@ makeBlank :: Int -> Int -> [[CellState]]
 makeBlank h w = replicate h (replicate w Undef)
 
 sizeToHint :: Int -> HintState
-sizeToHint s = Hint s (-1) False
+sizeToHint s = Hint s Nothing Nothing False
 
 readLane :: String -> LaneState
 readLane lane =
@@ -67,7 +68,12 @@ putRow row = do
 
 
 -- slice By Off, returns On -> True | Undef -> False List and segment left-position (zero-starting)
-segments :: [CellState] -> [(Int, [Bool])]
+data Segment =
+  Segment { leftPos :: Int
+          , onState :: [Bool]
+          } deriving (Show)
+
+segments :: [CellState] -> [Segment]
 segments lane =
   let segList = wordsBy (== Off) lane
       segState = map (map (== On)) segList
@@ -75,15 +81,18 @@ segments lane =
       trans = zip3 isOffs (drop 1 isOffs) [0..]
       transf = mapMaybe (\(h, t, i) -> if (not h) && t then Just i else Nothing) trans
   in
-  zip transf segState
+  zipWith Segment transf segState
 
--- Step 1. by On cell, set pivots for each state
+-- Tactic 1. by On cell, set pivots for each state
 -- checkPivots :: [CellState] -> LaneState -> LaneState
+
+--
 -- turnOffBlank :: [CellState] -> LaneState -> [CellState]
 
-solveLane :: LaneState -> [CellState] -> (LaneState, [CellState])
+-- solve each lane
+solveLane :: LaneState -> [CellState] -> Maybe (LaneState, [CellState])
 solveLane laneHint lane =
-  (Lane (hints laneHint) False (finished laneHint), lane)
+  Just (Lane (hints laneHint) False (finished laneHint), lane)
 
 -- assume that lanestate are row hints.
 -- transpose cellstates if you want to set column hints
@@ -91,8 +100,12 @@ setModified :: [LaneState] -> [[CellState]] -> [[CellState]] -> [LaneState]
 setModified =
   zipWith3 $ \lane old new -> if old == new then lane else Lane (hints lane) True (finished lane)
 
-solveByOverlap :: BoardState -> BoardState
-solveByOverlap board =
+solveByOverlap :: BoardState -> Maybe BoardState
+solveByOverlap board = do
+  let oldCells = cells board
+  rowSolved <- zipWithM solveLane (rowHint board) oldCells
+
+
   let oldCells = cells board
       rowSolved = zipWith solveLane (rowHint board) oldCells
       (rtemphint, rcells) = unzip rowSolved
