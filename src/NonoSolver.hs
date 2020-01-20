@@ -89,8 +89,8 @@ readBoard' handle = do
   if (w <= 0 || h <= 0) then fail "height or width is less than 1" else return ()
   let lanes = map readLane $ lines ctn
   if (length lanes < w + h) then fail "insufficient hint count" else return ()
-  let (!rh, ch') = splitAt w lanes
-  let (!ch, _) = splitAt h ch'
+  let (!rh, ch') = splitAt h lanes
+  let (!ch, _) = splitAt w ch'
   return $ Board h w (makeBlank h w) rh ch
 
 readBoard :: String -> IO BoardState
