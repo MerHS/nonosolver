@@ -1,0 +1,64 @@
+
+./Setup.hs,15
+main main1,2
+
+./app/Main.hs,37
+module Main Main0,1
+main main5,6
+
+./src/NonoSolver.hs,1582
+module NonoSolverNonoSolver1,2
+data HintState HintState22,23
+  Hint Hint23,24
+  Hint { size size23,24
+       , exRange exRange24,25
+       , pivot pivot25,26
+       , solved solved26,27
+instance Show Show HintState28,29
+  show show29,30
+data LaneState LaneState36,37
+  Lane Lane37,38
+  Lane { hints hints37,38
+       , modified modified38,39
+       , finished finished39,40
+instance Show Show LaneState41,42
+  show show42,43
+data CellState CellState48,49
+data CellState = On On48,49
+data CellState = On | Off Off48,49
+data CellState = On | Off | Undef Undef48,49
+instance Show Show CellState49,50
+  show show50,51
+data BoardState BoardState55,56
+  Board Board56,57
+  Board { height height56,57
+        , width width57,58
+        , cells cells58,59
+        , rowHint rowHint59,60
+        , colHint colHint60,61
+instance Show Show BoardState62,63
+  show show63,64
+makeBlank makeBlank72,73
+sizeToHint sizeToHint75,76
+readLane readLane78,79
+readBoard' readBoard'82,83
+readBoard readBoard96,97
+data Segment Segment103,104
+  Segment Segment104,105
+  Segment { leftPos leftPos104,105
+          , onState onState105,106
+segments segments108,109
+solveLane solveLane125,126
+setModified setModified131,132
+solveByOverlap solveByOverlap135,136
+solveByDFS solveByDFS152,153
+checkModified checkModified157,158
+checkSolved checkSolved161,162
+solveBoard solveBoard164,165
+printRow printRow176,177
+printBoard printBoard181,182
+solveFileAndPrint solveFileAndPrint186,187
+loadTest loadTest200,201
+
+./test/Spec.hs,15
+main main2,3

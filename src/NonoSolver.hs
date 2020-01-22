@@ -18,6 +18,7 @@ import           Data.List
 import           Data.List.Split
 import           Data.Maybe
 import           System.IO
+import           System.IO.Unsafe (unsafePerformIO)
 
 data HintState =
   Hint { size    :: Int
@@ -115,16 +116,16 @@ segments lane =
   in
   zipWith Segment transf segState
 
--- Tactic 1. by On cell, set pivots for each state
--- checkPivots :: [CellState] -> LaneState -> LaneState
+-- Tactic 1-1. Check pivoted/solved hint & discriminate contradiction
+-- checkPivots :: [CellState] -> LaneState -> Maybe LaneState
 
 --
 -- turnOffBlank :: [CellState] -> LaneState -> [CellState]
 
 -- solve each lane
-solveLane :: LaneState -> [CellState] -> (LaneState, [CellState])
+solveLane :: LaneState -> [CellState] -> Maybe (LaneState, [CellState])
 solveLane laneHint lane =
-  (Lane (hints laneHint) False (finished laneHint), lane)
+  Just (Lane (hints laneHint) False (finished laneHint), lane)
 
 -- assume that lanestate are row hints.
 -- transpose cellstates if you want to set column hints
@@ -132,25 +133,25 @@ setModified :: [LaneState] -> [[CellState]] -> [[CellState]] -> [LaneState]
 setModified =
   zipWith3 $ \lane old new -> if old == new then lane else Lane (hints lane) True (finished lane)
 
-solveByOverlap :: BoardState -> BoardState
-solveByOverlap board =
-  -- let oldCells = cells board
-  --rowSolved <- zipWithM solveLane (rowHint board) oldCells
+solveByOverlap :: BoardState -> Maybe BoardState
+solveByOverlap board = do
   let oldCells = cells board
-      rowSolved = zipWith solveLane (rowHint board) oldCells
-      (rtemphint, rcells) = unzip rowSolved
+  rowSolved <- zipWithM solveLane (rowHint board) oldCells
+
+  let (rtemphint, rcells) = unzip rowSolved
       flipcells = transpose rcells
       ctemphint = setModified (colHint board) (transpose oldCells) flipcells
-      colSolved = zipWith solveLane ctemphint flipcells
-      (chint, ccells) = unzip colSolved
+  colSolved <- zipWithM solveLane ctemphint flipcells
+
+  let (chint, ccells) = unzip colSolved
       newcells = transpose ccells
       rhint = setModified rtemphint rcells newcells
-  in
-  Board (height board) (width board) newcells rhint chint
+
+  Just $ Board (height board) (width board) newcells rhint chint
 
 
-solveByDFS :: BoardState -> BoardState
-solveByDFS board = board
+solveByDFS :: BoardState -> Maybe BoardState
+solveByDFS board = Just board
 
 ------------ SOLVER ------------
 
@@ -161,12 +162,15 @@ checkModified board =
 checkSolved :: BoardState -> Bool
 checkSolved board = all (notElem Undef) (cells board)
 
-solveBoard :: BoardState -> BoardState
-solveBoard board =
-  let nextBoard = solveByOverlap board in
-  if checkSolved nextBoard then nextBoard
-  else if checkModified nextBoard then solveBoard board
-  else solveByDFS nextBoard
+solveBoard :: BoardState -> Maybe BoardState
+solveBoard board = do
+  nextBoard <- solveByOverlap board
+  if checkSolved nextBoard then
+    Just nextBoard
+  else if checkModified nextBoard then
+    solveBoard board
+  else
+    solveByDFS nextBoard
 
 ------------ PRINTER ------------
 
@@ -185,4 +189,18 @@ solveFileAndPrint fileName = do
   board <- readBoard fileName
   printBoard board
   putStrLn $ "file: " ++ fileName
-  printBoard $ solveBoard board
+  let solvedBoard = solveBoard board
+  if null solvedBoard then
+    putStrLn "UNSOLVABLE"
+  else
+    printBoard $ fromJust solvedBoard
+
+
+------- TESTER (TEMP) -------
+
+loadTest :: ([[CellState]], BoardState)
+loadTest =
+  let b = unsafePerformIO $ readBoard "test.mod"
+      c = cells b
+  in
+  (c, b)
