@@ -176,7 +176,7 @@ solveTrivial lane cells =
     Just (lane, cells)
   else do
     allocedHints <- allocateHints hints segments []
-    cellConflict <- findConflict cells (pivotOnSet (length cells) hints)
+    cellConflict <- findConflict cells (pivotOnSet (length cells) allocedHints)
     return $ (Lane allocedHints False True, cellConflict)
 
 allocateHints :: [Hint] -> [Segment] -> [Hint] -> Maybe [Hint]
