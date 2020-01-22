@@ -6,7 +6,7 @@ main main1,2
 module Main Main0,1
 main main5,6
 
-./src/NonoSolver.hs,1507
+./src/NonoSolver.hs,1540
 module NonoSolverNonoSolver1,2
 data Hint Hint22,23
   Hint Hint23,24
@@ -48,17 +48,18 @@ data Segment Segment103,104
   Segment { leftPos leftPos104,105
           , onState onState105,106
 segments segments108,109
-solveLane solveLane125,126
-setModified setModified131,132
-solveByOverlap solveByOverlap135,136
-solveByDFS solveByDFS152,153
-checkModified checkModified157,158
-checkSolved checkSolved161,162
-solveBoard solveBoard164,165
-printRow printRow176,177
-printBoard printBoard181,182
-solveFileAndPrint solveFileAndPrint186,187
-loadTest loadTest200,201
+checkPivots checkPivots119,120
+solveLane solveLane129,130
+setModified setModified135,136
+solveByOverlap solveByOverlap139,140
+solveByDFS solveByDFS156,157
+checkModified checkModified161,162
+checkSolved checkSolved165,166
+solveBoard solveBoard168,169
+printRow printRow180,181
+printBoard printBoard185,186
+solveFileAndPrint solveFileAndPrint190,191
+loadTest loadTest204,205
 
 ./test/Spec.hs,15
 main main2,3

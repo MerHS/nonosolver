@@ -117,9 +117,13 @@ segments lane =
   zipWith Segment transf segState
 
 -- Tactic 1-1. Check pivoted/solved hint & discriminate contradiction
--- checkPivots :: [Cell] -> Lane -> Maybe Lane
+checkPivots :: [Cell] -> Lane -> Maybe Lane
+checkPivots seg lane =
+  Just lane
 
---
+-- Tactic 1. tactic 1-1 to 1-7
+
+
 -- turnOffBlank :: [Cell] -> Lane -> [Cell]
 
 -- solve each lane

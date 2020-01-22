@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 80df6284ef7b3ce407ee2b8748d6eed87945e908fa4b0fa56f1f620a20aba424
+-- hash: 3f9f5cb5ca6bd64797cf9fa56559bba6f5893396c3751613ad69c1c6e8d9e673
 
 name:           nonosolver
 version:        0.1.0.0
@@ -35,7 +35,8 @@ library
   hs-source-dirs:
       src
   build-depends:
-      base >=4.7 && <5
+      array
+    , base >=4.7 && <5
     , split
   default-language: Haskell2010
 
@@ -47,7 +48,8 @@ executable nonosolver-exe
       app
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.7 && <5
+      array
+    , base >=4.7 && <5
     , nonosolver
     , split
   default-language: Haskell2010
@@ -61,7 +63,8 @@ test-suite nonosolver-test
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.7 && <5
+      array
+    , base >=4.7 && <5
     , nonosolver
     , split
   default-language: Haskell2010
