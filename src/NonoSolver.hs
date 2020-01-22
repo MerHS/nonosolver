@@ -1,10 +1,10 @@
 {-# LANGUAGE BangPatterns #-}
 module NonoSolver
     (
-      HintState (..),
-      LaneState (..),
-      CellState (..),
-      BoardState (..),
+      Hint (..),
+      Lane (..),
+      Cell (..),
+      Board (..),
       readLane,
       readBoard,
       printRow,
@@ -20,13 +20,13 @@ import           Data.Maybe
 import           System.IO
 import           System.IO.Unsafe (unsafePerformIO)
 
-data HintState =
+data Hint =
   Hint { size    :: Int
        , exRange :: Maybe (Int, Int) -- expected range
        , pivot   :: Maybe (Int, Int) -- 0-indexed pivoted cell position-1 if unpivoted
        , solved  :: Bool
        }
-instance Show HintState where
+instance Show Hint where
   show hint =
     let
       rng = maybe "(-,-)" show $ exRange hint
@@ -34,33 +34,33 @@ instance Show HintState where
     in
     (show $ size hint) ++ rng ++ pvt ++ (if solved hint then "S" else "")
 
-data LaneState =
-  Lane { hints    :: [HintState]
+data Lane =
+  Lane { hints    :: [Hint]
        , modified :: Bool
        , finished :: Bool
        }
-instance Show LaneState where
+instance Show Lane where
   show lane =
     let mflag = if (modified lane) then "M" else "_"
         fflag = if (finished lane) then "F" else "_"
     in
     mflag ++ fflag ++ " " ++ (intercalate " " (map show $ hints lane))
 
-data CellState = On | Off | Undef deriving (Eq)
-instance Show CellState where
+data Cell = On | Off | Undef deriving (Eq)
+instance Show Cell where
   show cell = case cell of
     On    -> "■"
     Off   -> "□"
     Undef -> "X"
 
-data BoardState =
+data Board =
   Board { height  :: Int
         , width   :: Int
-        , cells   :: [[CellState]]
-        , rowHint :: [LaneState]
-        , colHint :: [LaneState]
+        , cells   :: [[Cell]]
+        , rowHint :: [Lane]
+        , colHint :: [Lane]
         }
-instance Show BoardState where
+instance Show Board where
   show board =
     let
       header = "(" ++ show (height board) ++ "," ++ show (width board) ++ ")"
@@ -70,17 +70,17 @@ instance Show BoardState where
 
 ------------ READER ------------
 
-makeBlank :: Int -> Int -> [[CellState]]
+makeBlank :: Int -> Int -> [[Cell]]
 makeBlank h w = replicate h (replicate w Undef)
 
-sizeToHint :: Int -> HintState
+sizeToHint :: Int -> Hint
 sizeToHint s = Hint s Nothing Nothing False
 
-readLane :: String -> LaneState
+readLane :: String -> Lane
 readLane lane =
   Lane (map (sizeToHint . read) $ words lane) True False
 
-readBoard' :: Handle -> IO BoardState
+readBoard' :: Handle -> IO Board
 readBoard' handle = do
   whLine <- hGetLine handle
   let hw = map read $ words whLine
@@ -94,7 +94,7 @@ readBoard' handle = do
   let (!ch, _) = splitAt w ch'
   return $ Board h w (makeBlank h w) rh ch
 
-readBoard :: String -> IO BoardState
+readBoard :: String -> IO Board
 readBoard fileName = do
   withFile fileName ReadMode readBoard'
 
@@ -106,7 +106,7 @@ data Segment =
           , onState :: [Bool]
           } deriving (Show)
 
-segments :: [CellState] -> [Segment]
+segments :: [Cell] -> [Segment]
 segments lane =
   let segList = wordsBy (== Off) lane
       segState = map (map (== On)) segList
@@ -117,23 +117,23 @@ segments lane =
   zipWith Segment transf segState
 
 -- Tactic 1-1. Check pivoted/solved hint & discriminate contradiction
--- checkPivots :: [CellState] -> LaneState -> Maybe LaneState
+-- checkPivots :: [Cell] -> Lane -> Maybe Lane
 
 --
--- turnOffBlank :: [CellState] -> LaneState -> [CellState]
+-- turnOffBlank :: [Cell] -> Lane -> [Cell]
 
 -- solve each lane
-solveLane :: LaneState -> [CellState] -> Maybe (LaneState, [CellState])
+solveLane :: Lane -> [Cell] -> Maybe (Lane, [Cell])
 solveLane laneHint lane =
   Just (Lane (hints laneHint) False (finished laneHint), lane)
 
 -- assume that lanestate are row hints.
 -- transpose cellstates if you want to set column hints
-setModified :: [LaneState] -> [[CellState]] -> [[CellState]] -> [LaneState]
+setModified :: [Lane] -> [[Cell]] -> [[Cell]] -> [Lane]
 setModified =
   zipWith3 $ \lane old new -> if old == new then lane else Lane (hints lane) True (finished lane)
 
-solveByOverlap :: BoardState -> Maybe BoardState
+solveByOverlap :: Board -> Maybe Board
 solveByOverlap board = do
   let oldCells = cells board
   rowSolved <- zipWithM solveLane (rowHint board) oldCells
@@ -150,19 +150,19 @@ solveByOverlap board = do
   Just $ Board (height board) (width board) newcells rhint chint
 
 
-solveByDFS :: BoardState -> Maybe BoardState
+solveByDFS :: Board -> Maybe Board
 solveByDFS board = Just board
 
 ------------ SOLVER ------------
 
-checkModified :: BoardState -> Bool
+checkModified :: Board -> Bool
 checkModified board =
   or (map modified $ rowHint board) || or (map modified $ colHint board)
 
-checkSolved :: BoardState -> Bool
+checkSolved :: Board -> Bool
 checkSolved board = all (notElem Undef) (cells board)
 
-solveBoard :: BoardState -> Maybe BoardState
+solveBoard :: Board -> Maybe Board
 solveBoard board = do
   nextBoard <- solveByOverlap board
   if checkSolved nextBoard then
@@ -174,12 +174,12 @@ solveBoard board = do
 
 ------------ PRINTER ------------
 
-printRow :: [CellState] -> IO ()
+printRow :: [Cell] -> IO ()
 printRow row = do
   let squares = concat . map show $ row
   putStrLn squares
 
-printBoard :: BoardState -> IO ()
+printBoard :: Board -> IO ()
 printBoard board = do
   mapM_ printRow $ cells board
 
@@ -198,7 +198,7 @@ solveFileAndPrint fileName = do
 
 ------- TESTER (TEMP) -------
 
-loadTest :: ([[CellState]], BoardState)
+loadTest :: ([[Cell]], Board)
 loadTest =
   let b = unsafePerformIO $ readBoard "test.mod"
       c = cells b
