@@ -14,6 +14,9 @@ module NonoSolver
     ) where
 
 import           Control.Monad
+import           Control.Monad.ST
+import           Data.Array
+import           Data.Array.ST
 import           Data.List
 import           Data.List.Split
 import           Data.Maybe
@@ -21,30 +24,30 @@ import           System.IO
 import           System.IO.Unsafe (unsafePerformIO)
 
 data Hint =
-  Hint { size    :: Int
-       , exRange :: Maybe (Int, Int) -- expected range
-       , pivot   :: Maybe (Int, Int) -- 0-indexed pivoted cell position-1 if unpivoted
-       , solved  :: Bool
+  Hint { getSize    :: Int -- range is zero-indexed, closed
+       , getExRange :: Maybe (Int, Int) -- expected range
+       , getPivot   :: Maybe (Int, Int) -- pivoted cell position
+       , isSolved   :: Bool
        }
 instance Show Hint where
   show hint =
     let
-      rng = maybe "(-,-)" show $ exRange hint
-      pvt = maybe "(-,-)" show $ pivot hint
+      rng = maybe "(-,-)" show $ getExRange hint
+      pvt = maybe "(-,-)" show $ getPivot hint
     in
-    (show $ size hint) ++ rng ++ pvt ++ (if solved hint then "S" else "")
+    (show $ getSize hint) ++ rng ++ pvt ++ (if isSolved hint then "S" else "")
 
 data Lane =
-  Lane { hints    :: [Hint]
-       , modified :: Bool
-       , finished :: Bool
+  Lane { getHints   :: [Hint]
+       , isModified :: Bool
+       , isFinished :: Bool
        }
 instance Show Lane where
   show lane =
-    let mflag = if (modified lane) then "M" else "_"
-        fflag = if (finished lane) then "F" else "_"
+    let mflag = if (isModified lane) then "M" else "_"
+        fflag = if (isFinished lane) then "F" else "_"
     in
-    mflag ++ fflag ++ " " ++ (intercalate " " (map show $ hints lane))
+    mflag ++ fflag ++ " " ++ (intercalate " " (map show $ getHints lane))
 
 data Cell = On | Off | Undef deriving (Eq)
 instance Show Cell where
@@ -54,19 +57,19 @@ instance Show Cell where
     Undef -> "X"
 
 data Board =
-  Board { height  :: Int
-        , width   :: Int
-        , cells   :: [[Cell]]
-        , rowHint :: [Lane]
-        , colHint :: [Lane]
+  Board { getHeight   :: Int
+        , getWidth    :: Int
+        , getLattice  :: [[Cell]]
+        , getRowHints :: [Lane]
+        , getColHints :: [Lane]
         }
 instance Show Board where
   show board =
     let
-      header = "(" ++ show (height board) ++ "," ++ show (width board) ++ ")"
-      boardline = map (concat . map show) (cells board)
+      header = "(" ++ show (getHeight board) ++ "," ++ show (getWidth board) ++ ")"
+      boardline = map (concat . map show) (getLattice board)
     in
-    unlines $ header:(boardline ++ ["--rows--"] ++ map show (rowHint board) ++ ["--columns--"] ++ map show (colHint board))
+    unlines $ header:(boardline ++ ["--rows--"] ++ map show (getRowHints board) ++ ["--columns--"] ++ map show (getColHints board))
 
 ------------ READER ------------
 
@@ -87,7 +90,7 @@ readBoard' handle = do
       h = head hw
       w = head $ tail hw
   ctn <- hGetContents handle
-  if (w <= 0 || h <= 0) then fail "height or width is less than 1" else return ()
+  if (w <= 0 || h <= 0) then fail "getHeight or getWidth is less than 1" else return ()
   let lanes = map readLane $ lines ctn
   if (length lanes < w + h) then fail "insufficient hint count" else return ()
   let (!rh, ch') = splitAt h lanes
@@ -98,16 +101,21 @@ readBoard :: String -> IO Board
 readBoard fileName = do
   withFile fileName ReadMode readBoard'
 
+------------ UTILITY ------------
+
+filterMap :: (a -> Bool) -> (a -> a) -> [a] -> [a]
+filterMap f m = map (\ax -> if f ax then m ax else ax)
+
 ------------ TACTICS ------------
 
 -- slice By Off, returns On -> True | Undef -> False List and segment left-position (zero-starting)
 data Segment =
-  Segment { leftPos :: Int
-          , onState :: [Bool]
+  Segment { getLeftPos :: Int
+          , getOnState :: [Bool]
           } deriving (Show)
 
-segments :: [Cell] -> [Segment]
-segments lane =
+segmentize :: [Cell] -> [Segment]
+segmentize lane =
   let segList = wordsBy (== Off) lane
       segState = map (map (== On)) segList
       isOffs = False:(map (/= Off) lane)
@@ -116,42 +124,152 @@ segments lane =
   in
   zipWith Segment transf segState
 
--- Tactic 1-1. Check pivoted/solved hint & discriminate contradiction
-checkPivots :: [Cell] -> Lane -> Maybe Lane
-checkPivots seg lane =
+desegmentize :: Int -> [Segment] -> [Cell]
+desegmentize laneSize segments = elems $ runSTArray $ do
+    cells <- newArray (0, laneSize - 1) Off
+    forM_ segments $ \(Segment lp on) -> do
+      forM_ (zip on [0..]) $ \(isOn, segId) -> do
+        writeArray cells (lp + segId) (if isOn then On else Undef)
+    return cells
+
+segSizes :: [Segment] -> [(Int, Int)]
+segSizes = map (\seg -> (getLeftPos seg, length $ getOnState seg))
+
+-- return hint by segment getSize and range (overridable isSolved)
+segToHint :: Bool -> Segment -> Hint
+segToHint overrideSolve seg =
+  let len = length $ getOnState seg
+      lpos = getLeftPos seg
+      solved = overrideSolve || and (getOnState seg)
+  in
+    Hint len (Just (lpos, lpos + len - 1)) (Just (lpos, lpos + len - 1)) solved
+
+-- Tactic 1. Solve Trivial Cases
+pivotOnSet :: Int -> [Hint] -> [Cell]
+pivotOnSet len hints = elems $ runSTArray $ do
+  cells <- newArray (0, len - 1) Off
+  forM_ hints $ \(Hint _ _ pivot _) ->
+    case pivot of
+      Nothing -> return ()
+      Just (l, r) ->
+        forM_ [l..r] $ \i ->
+          writeArray cells i On
+  return cells
+
+findConflict :: [Cell] -> [Cell] -> Maybe [Cell]
+findConflict old new =
+  if or (zipWith isConflict old new) then
+    Nothing
+  else
+    Just new
+  where isConflict cold cnew = (cold == On && cnew == Off) || (cold == Off && cnew == On)
+
+solveTrivial :: Lane -> [Cell] -> Maybe (Lane, [Cell])
+solveTrivial lane cells =
+  let
+    segments = segmentize cells
+    hints = getHints lane
+    hintTotal = length hints + (sum $ map getSize hints)
+    segTotal = length segments + (sum $ map (length . getOnState) segments)
+  in
+  if hintTotal /= segTotal then
+    Just (lane, cells)
+  else do
+    allocedHints <- allocateHints hints segments []
+    cellConflict <- findConflict cells (pivotOnSet (length cells) hints)
+    return $ (Lane allocedHints False True, cellConflict)
+
+allocateHints :: [Hint] -> [Segment] -> [Hint] -> Maybe [Hint]
+allocateHints hints segments hintAcc =
+  case hints of
+    [] -> Just $ reverse hintAcc
+    (Hint size _ _ _):hs -> case segments of
+      []     -> Nothing
+      (Segment lp onState):ss ->
+        if (length onState < size || length onState == size + 1) then
+          Nothing
+        else
+          let newAcc = (Hint size (Just (lp, lp + size - 1)) (Just (lp, lp + size - 1)) True):hintAcc in
+          if length onState > size then
+            allocateHints hs ((Segment (lp + size + 1) (drop (size + 1) onState)):ss) newAcc
+          else
+            allocateHints hs ss newAcc
+
+
+-- Tactic 2-1. Check pivoted/isSolved hint & discriminate contradiction
+checkPivots :: Lane -> [Cell] -> Maybe Lane
+checkPivots lane cells =
   Just lane
-
--- Tactic 1. tactic 1-1 to 1-7
-
 
 -- turnOffBlank :: [Cell] -> Lane -> [Cell]
 
+------------ TACTIC MERGER -----------
+
+-- resolve all getHints by isSolved cell
+finalizeLane :: Lane -> [Cell] -> Maybe (Lane, [Cell])
+finalizeLane lane cells =
+  if not $ isFinished lane then
+    Just (lane, cells)
+  else if all isSolved (getHints lane) then
+    Just (lane, cells)
+  else
+    let
+      hints = getHints lane
+      segments = segmentize cells
+    in
+    if length segments /= length hints then
+      Nothing
+    else if any (\(hint, seg) -> getSize hint /= length (getOnState seg)) (zip hints segments) then
+      Nothing
+    else
+      let newHints = map (segToHint True) segments in
+      Just (Lane newHints False True, cells)
+
+-- apply tactic when the lane is not isFinished
+applyTactic :: (Lane -> [Cell] -> Maybe (Lane, [Cell])) -> Lane -> [Cell] -> Maybe (Lane, [Cell])
+applyTactic tactic lane cells =
+  if isFinished lane then
+    finalizeLane lane cells
+  else do
+    (l1, c1) <- tactic lane cells
+    finalizeLane l1 c1
+
 -- solve each lane
 solveLane :: Lane -> [Cell] -> Maybe (Lane, [Cell])
-solveLane laneHint lane =
-  Just (Lane (hints laneHint) False (finished laneHint), lane)
+solveLane lane cells =
+  if isFinished lane || not (isModified lane) then
+    Just (lane, cells)
+  else
+    do
+      (lane1, cells1) <- applyTactic solveTrivial lane cells
+      return (lane1, cells1)
 
--- assume that lanestate are row hints.
--- transpose cellstates if you want to set column hints
-setModified :: [Lane] -> [[Cell]] -> [[Cell]] -> [Lane]
+
+-- assume that lanestate are row getHints.
+-- transpose cellstates if you want to set column getHints
+setModified :: [[Cell]] -> [[Cell]] -> [Lane] -> [Lane]
 setModified =
-  zipWith3 $ \lane old new -> if old == new then lane else Lane (hints lane) True (finished lane)
+  zipWith3 $ \old new lane ->
+    if isFinished lane || old == new then
+      Lane (getHints lane) False True
+    else
+      Lane (getHints lane) True (isFinished lane)
 
 solveByOverlap :: Board -> Maybe Board
 solveByOverlap board = do
-  let oldCells = cells board
-  rowSolved <- zipWithM solveLane (rowHint board) oldCells
+  let oldLattice = getLattice board
+  rowSolved <- zipWithM solveLane (getRowHints board) oldLattice
 
   let (rtemphint, rcells) = unzip rowSolved
       flipcells = transpose rcells
-      ctemphint = setModified (colHint board) (transpose oldCells) flipcells
+      ctemphint = setModified (transpose oldLattice) flipcells $ getColHints board
   colSolved <- zipWithM solveLane ctemphint flipcells
 
   let (chint, ccells) = unzip colSolved
       newcells = transpose ccells
-      rhint = setModified rtemphint rcells newcells
+      rhint = setModified rcells newcells rtemphint
 
-  Just $ Board (height board) (width board) newcells rhint chint
+  Just $ Board (getHeight board) (getWidth board) newcells rhint chint
 
 
 solveByDFS :: Board -> Maybe Board
@@ -161,10 +279,10 @@ solveByDFS board = Just board
 
 checkModified :: Board -> Bool
 checkModified board =
-  or (map modified $ rowHint board) || or (map modified $ colHint board)
+  or (map isModified $ getRowHints board) || or (map isModified $ getColHints board)
 
 checkSolved :: Board -> Bool
-checkSolved board = all (notElem Undef) (cells board)
+checkSolved board = all (notElem Undef) (getLattice board)
 
 solveBoard :: Board -> Maybe Board
 solveBoard board = do
@@ -185,9 +303,9 @@ printRow row = do
 
 printBoard :: Board -> IO ()
 printBoard board = do
-  mapM_ printRow $ cells board
+  mapM_ printRow $ getLattice board
 
--- read nonogram file and print solved
+-- read nonogram file and print isSolved
 solveFileAndPrint :: String -> IO ()
 solveFileAndPrint fileName = do
   board <- readBoard fileName
@@ -205,6 +323,6 @@ solveFileAndPrint fileName = do
 loadTest :: ([[Cell]], Board)
 loadTest =
   let b = unsafePerformIO $ readBoard "test.mod"
-      c = cells b
+      c = getLattice b
   in
   (c, b)
